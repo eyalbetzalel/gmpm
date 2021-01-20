@@ -15,3 +15,20 @@
 
 #############################################################################################################
 
+from LoadData import unified_table
+import numpy as np
+
+def kl_divergence(p, q):
+	return sum(p[i] * np.log2(p[i]/q[i]) for i in range(len(p)))
+
+p = []
+q = []
+
+for i in range(len(unified_table)):
+    p.append((np.exp(-1 * unified_table[i][1]))/512)
+    q.append((np.exp(-1 * unified_table[i][2]))/512)
+
+
+yos = kl_divergence(p, q)
+
+v=0
