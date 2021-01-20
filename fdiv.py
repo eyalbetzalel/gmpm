@@ -25,8 +25,8 @@ p = []
 q = []
 
 for i in range(len(unified_table)):
-    p.append((np.exp(-1 * unified_table[i][1]))/512)
-    q.append((np.exp(-1 * unified_table[i][2]))/512)
+    p.append((np.exp(-1 * unified_table[i][1]))/1024)
+    q.append((np.exp(-1 * unified_table[i][2]))/1024)
 
 
 yos = kl_divergence(p, q)

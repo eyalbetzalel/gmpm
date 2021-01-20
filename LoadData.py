@@ -14,14 +14,13 @@
 # Output : 
 #1. Unified table for all results
 
-# TODO : 
-
 #############################################################################################################
+
+# import :
 
 import numpy as np
 import pickle
 import argparse
-import os
 
 # args :
 
@@ -31,7 +30,7 @@ parser.add_argument(
     "--model_a",
     type=str,
     help="path to model a",
-    #default=r"C:\Users\eyalb\Desktop\log\ep_0_ch_128_psb_2_resb_4_atval_64_attk_8\ep_0_ch_128_psb_2_resb_4_atval_64_attk_8_epoch_50_eval.p",
+    # default=r"C:\Users\eyalb\Desktop\log\ep_0_ch_128_psb_2_resb_4_atval_64_attk_8\ep_0_ch_128_psb_2_resb_4_atval_64_attk_8_epoch_50_eval.p",
     default=r"C:\Users\eyalb\Desktop\log\ep_0_ch_128_psb_8_resb_4_atval_64_attk_8\ep_0_ch_128_psb_8_resb_4_atval_64_attk_8_epoch_50_eval.p",
 )
 
@@ -39,7 +38,8 @@ parser.add_argument(
     "--model_b",
     type=str,
     help="path to model b",
-    default=r"C:\Users\eyalb\Desktop\log\imagegpt\FullossResults_train.npy",
+    # default=r"C:\Users\eyalb\Desktop\log\ep_0_ch_256_psb_8_resb_4_atval_128_attk_16\ep_0_ch_256_psb_8_resb_4_atval_128_attk_16_epoch_50_eval.p",
+    default=r"C:\Users\eyalb\Desktop\log\ep_0_ch_128_psb_2_resb_4_atval_64_attk_8\ep_0_ch_128_psb_2_resb_4_atval_64_attk_8_epoch_50_eval.p",
 )
 
 args = parser.parse_args()
@@ -62,18 +62,17 @@ def load_file(path):
 
     return model_table
 
+# Import data from models :
 
-
-# Import ImageGPT files :
-
-# TODO:
-
-# Import PixelSnail files:
+# Load files :
 
 model_a = load_file(args.model_a)
 model_b = load_file(args.model_b)
 
+# Create unified table :
+
 unified_table = []
+
 for i in range(len(model_a)):
 
     data = model_a[i][0]
@@ -83,5 +82,3 @@ for i in range(len(model_a)):
 
 
 unified_table
-
-# Create unified table : 
