@@ -19,7 +19,7 @@ from LoadData import unified_table
 import numpy as np
 
 def kl_divergence(p, q):
-	return sum(p[i] * np.log2(p[i]/q[i]) for i in range(len(p)))
+	return (1.0/len(p)) * sum(np.log2(p[i]/q[i]) for i in range(len(p)))
 
 p = []
 q = []
