@@ -23,6 +23,9 @@ import numpy as np
 import pickle
 import argparse
 from tqdm import tqdm
+import h5py
+import matplotlib.pyplot as plt
+import ot
 
 # args :
 
@@ -39,17 +42,18 @@ parser.add_argument(
     "--pixel_snail_data",
     type=str,
     help="Path to PixelSnail data",
-    default=r"C:\Users\eyalb\Desktop\Master\Courses\Generative_Models\HW\vae\VAE\gmpm\dataset_only_from_pixelsnail.p",
+    default=r"C:\Users\eyalb\Desktop\Master\Courses\Generative_Models\HW\vae\VAE\gmpm\test_imagegpt.h5",
 )
 
-
+# r"C:\Users\eyalb\Desktop\Master\Courses\Generative_Models\HW\vae\VAE\gmpm\dataset_only_from_pixelsnail.p"
+# r"C:\Users\eyalb\Desktop\Master\Courses\Generative_Models\HW\vae\VAE\gmpm\train_imagegpt.h5"
 parser.add_argument(
     "--pixelsnail_res",
     type=str,
     help="Path to PixelSnail results",
-    default=r"C:\Users\eyalb\Desktop\log\ep_0_ch_128_psb_2_resb_4_atval_64_attk_8",
+    default=r"C:\Users\eyalb\Desktop\log",
 )
-
+mode = "test"
 args = parser.parse_args()
 
 def load_file(path):
@@ -68,47 +72,222 @@ def load_file(path):
         for i in range(len(nll_vec)):
             model_table.append((np.asarray(dataset[i]), nll_vec[i]))
 
-    return model_table
+    elif path.endswith('.h5'):
 
+        with h5py.File(path, "r") as f:
+            a_group_key = list(f.keys())[0]
+            # Get the data
+            model_table = list(f[a_group_key])
+
+    return model_table
 
 def add_element(dict, key, value):
     if key not in dict:
         dict[key] = []
     dict[key].append(value)
 
+def kld(p, q):
 
-def kl_divergence(p, q):
-    return (1.0 / len(p)) * sum(np.log(p[i] / q[i]) for i in range(len(p)))
+    # Original Calculation : (1.0 / len(p)) * sum((np.log(p[i] / q[i]) for i in range(len(p)))
+
+    # Variance calculation using Jack-Knife Resampling method :
+
+    # Step 1 - Calculate xi :
+
+    p_np = np.asarray(p)
+    q_np = np.asarray(q)
+    log_vec = (1.0 / (len(p) - 1)) * np.log(p_np / q_np)
+    xi = [0] * len(p)
+
+    for i in range(len(p)):
+        xi[i] = np.sum(np.delete(log_vec, i))
+
+    # Step 2 - Calculate Mean and VAR :
+
+    mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
+    var = ((len(p)-1) / len(p)) * sum(((xi[i]-mu) ** 2) for i in range(len(p)))
+
+    return mu, var
+
+def tvd(p, q):
+
+    # Total Variation Distance Calculation
+    # Original Calculation : (1.0 / len(p)) * sum(0.5 * np.abs(p[i]/q[i] - 1) for i in range(len(p)))
+    # Variance calculation using Jack-Knife Resampling method.
+
+    # Step 1 - Calculate xi :
+
+    p_np = np.asarray(p)
+    q_np = np.asarray(q)
+    tvd_vec = (1.0 / (len(p) - 1)) * (0.5 * np.abs((p_np/q_np) - 1))
+    xi = [0] * len(p)
+
+    for i in range(len(p)):
+        xi[i] = np.sum(np.delete(tvd_vec, i))
+
+    # Step 2 - Calculate Mean and VAR :
+
+    mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
+    var = ((len(p) - 1) / len(p)) * sum(((xi[i] - mu) ** 2) for i in range(len(p)))
+
+    return mu, var
+
+# def jsd(p, q):
+#
+#     # Jensen-Shannon Divergence Calculation :
+#     # Original Calculation (1) : m = [0.5 * (p[i] + q[i]) for i in range(len(p))]
+#     # Original Calculation (2) : return 0.5 * kld(p, m) + 0.5 * kld(q, m)
+#
+#     p_np = np.asarray(p)
+#     q_np = np.asarray(q)
+#     m_np = 0.5 * (p_np + q_np)
+#
+#     xi = [0] * len(p)
+#
+#     for i in range(len(p)):
+#
+#         curr_p = np.delete(p_np, i)
+#         curr_q = np.delete(q_np,i)
+#         curr_m = np.delete(m_np,i)
+#         xi[i] = 0.5 * kld(curr_p, curr_m)[0] + 0.5 * kld(curr_q, curr_m)[0]
+#
+#     # Step 2 - Calculate Mean and VAR :
+#
+#     mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
+#     sigma = ((len(p) - 1) / len(p)) * sum(((xi[i] - mu) ** 2) for i in range(len(p)))
+#
+#     return mu, sigma
+
+def jsd(p, q):
+
+    # Jensen-Shannon Divergence Calculation :
+    # Original Calculation (1) : m = [0.5 * (p[i] + q[i]) for i in range(len(p))]
+    # Original Calculation (2) : return 0.5 * kld(p, m) + 0.5 * kld(q, m)
+
+    p_np = np.asarray(p)
+    q_np = np.asarray(q)
+    log_vec = (1.0 / (len(p) - 1)) * 0.5 * ((1 + q_np/p_np) * np.log(2/((p_np / q_np) + 1)) + np.log(p_np / q_np))
+    xi = [0] * len(p)
+
+    for i in range(len(p)):
+        xi[i] = np.sum(np.delete(log_vec, i))
+
+    # Step 2 - Calculate Mean and VAR :
+
+    mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
+    var = ((len(p)-1) / len(p)) * sum(((xi[i]-mu) ** 2) for i in range(len(p)))
+
+    return mu, var
+
+def otd(p, q):
+
+    # Unbalanced Optimal transport using a Kullback-Leibler relaxation.
+
+    p_np = np.asarray(p)
+    q_np = np.asarray(q)
+    n = len(p)
+
+    # loss matrix
+
+    M = np.identity(n-1)
+    xi = [0] * len(p)
+
+    epsilon = 0.1  # entropy parameter
+    alpha = 1.  # Unbalanced KL relaxation parameter
+
+    for i in range(len(p)):
+
+        curr_p = np.delete(p_np, i)
+        curr_q = np.delete(q_np, i)
+        xi[i] = (1.0 / (len(p) - 1)) * ot.sinkhorn_unbalanced2(curr_p, curr_q, M, 1, 1, verbose=True)
 
 
-def tot_var_dist(p, q):
-    return (1.0 / len(p)) * sum(0.5 * np.abs((p[i] / q[i]) - 1) for i in range(len(p)))
+    # Step 2 - Calculate Mean and VAR :
 
+    mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
+    var = ((len(p)-1) / len(p)) * sum(((xi[i]-mu) ** 2) for i in range(len(p)))
 
-def js_divergence(p, q):
-    m = [0.5 * (p[i] + q[i]) for i in range(len(p))]
-    return 0.5 * kl_divergence(p, m) + 0.5 * kl_divergence(q, m)
+    return mu, var
 
 nll2prob = lambda a: np.exp(-1 * a)/1024
+
+def plot_graph(title,epochs, metrics, labels,colors):
+
+
+
+    plt.figure()
+
+    for i in range(len(epochs)):
+        if labels[i].split("_")[0] != "ep":
+            continue
+        zipped_lists = zip(epochs[i], metrics[i])
+        sorted_pairs = sorted(zipped_lists)
+        tuples = zip(*sorted_pairs)
+        epochs_vec, metrics_vec = [list(tuple) for tuple in tuples]
+        mu = [x[0] for x in metrics_vec]
+        var = [x[1] for x in metrics_vec]
+        plt.errorbar(epochs_vec, mu, yerr=var, c=colors(2*i), label=labels[i], marker='o')
+
+        rows = [epochs_vec, mu, var]
+        np.savetxt(labels[i] + "_" + mode + ".csv",
+                   rows,
+                   delimiter=", ",
+                   fmt='% s')
+
+    plt.title(title + " Score - " + mode + " Set")
+    plt.legend()
+    plt.ylabel(title)
+    plt.xlabel("Epoch")
+    plt.savefig(title + "_.png")
+
+def get_cmap(n, name='hsv'):
+    '''Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
+    RGB color; the keyword argument name must be a standard mpl colormap name.'''
+    return plt.cm.get_cmap(name, 2*n)
 
 # Import datasets:
 
 imagegpt_dataset = load_file(args.imagegpt_res)
 pixelsnail_data = load_file(args.pixel_snail_data)
 
-for root, dirs, files in os.walk(args.pixelsnail_res):
-    for file in files:
-        if file.endswith(".p"):
+ot_d = []
+kl = []
+js = []
+tot_var = []
+rev_kl = []
+label = []
+epochss = []
 
-            print(" Working on : %s" % file)
+
+for root, dirs, files in os.walk(args.pixelsnail_res):
+
+    curr_str = root.split("\\")
+    curr_str = curr_str[-1]
+    curr_kl = []
+    curr_js = []
+    curr_var_dist = []
+    curr_rev_kl = []
+    curr_ot_d = []
+    epochs = []
+
+
+    for filestr in files:
+        if filestr.endswith("_" + mode + "_eval.p"):
+
+            #train_eval
+            print(" Working on : %s" % filestr)
 
             # Import current model evaluation results:
 
             print(" == Load data ==")
 
-            pixelsnail_res = load_file(os.path.join(root, file))
+            pixelsnail_res = load_file(os.path.join(root, filestr))
 
             # Join data to NLL results :
+            if pixelsnail_data[1].shape[0] == 1024:
+
+                for i in range(len(pixelsnail_data)):
+                    pixelsnail_data[i] = np.expand_dims(pixelsnail_data[i],0)
 
             model_pixelsnail = []
             model_pixelsnail = [(pixelsnail_data[i], pixelsnail_res[i]) for i in range(len(pixelsnail_data))]
@@ -153,24 +332,53 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
                 p.append(nll2prob(sorted_list[i][1]))
                 q.append(nll2prob(sorted_list[i][2]))
 
-            kl_d = kl_divergence(p, q)
-            rev_kl_d = kl_divergence(q, p)
-            tot_var_dist_res = tot_var_dist(p, q)
-            js_divergence_res = js_divergence(p, q)
-            curr_run_str = file[:-2]
+
+            # ot_d_res = otd(p, q)
+            kld_mu, kld_var = kld(p, q)
+            rev_kld_mu, rev_kld_var = kld(q, p)
+            tvd_mu, tvd_var= tvd(p, q)
+            jsd_mu, jsd_var = jsd(p, q)
+            curr_run_str = filestr[:-2]
+
+            kld_res = (kld_mu, kld_var)
+            jsd_res = (jsd_mu, jsd_var)
+            tvd_res = (tvd_mu, tvd_var)
+            rev_kld_res = (rev_kld_mu, rev_kld_var)
 
             # Saving results to text file :
 
-            file_name = curr_run_str + ".txt"
-            file_name = os.path.join(root, file_name)
-            file = open(file_name,"a")
+            # file_name = curr_run_str + ".txt"
+            # file_name = os.path.join(root, file_name)
+            # file = open(file_name,"a")
+            #
+            # curr_run_str = curr_run_str
+            # kl_d_str = "kl_d = " + str(kld_res)
+            # rev_kl_d_str = "rev_kl_d = " + str(rev_kld_res)
+            # tot_var_dist_str = "tot_var_dist = " + str(tvd_res)
+            # jsd_str = "js_divergence = " + str(jsd_res)
+            #
+            # file.write('%r\n%r\n%r\n%r\n%r\n' % (curr_run_str, kl_d_str, rev_kl_d_str, tot_var_dist_str, jsd_str))
+            # file.close()
 
-            curr_run_str = curr_run_str
-            kl_d_str = "kl_d = " + str(kl_d)
-            rev_kl_d_str = "rev_kl_d = " + str(rev_kl_d)
-            tot_var_dist_str = "tot_var_dist = " + str(tot_var_dist_res)
-            js_divergence_str = "js_divergence = " + str(js_divergence_res)
+            curr_kl.append(kld_res)
+            curr_js.append(jsd_res)
+            curr_var_dist.append(tvd_res)
+            curr_rev_kl.append(rev_kld_res)
+            epoch = int(filestr.split("_")[-3])
+            epochs.append(epoch)
 
-            file.write('%r\n%r\n%r\n%r\n%r\n' % (curr_run_str, kl_d_str, rev_kl_d_str, tot_var_dist_str, js_divergence_str))
-            file.close()
+    kl.append(curr_kl)
+    js.append(curr_js)
+    tot_var.append(curr_var_dist)
+    rev_kl.append(curr_rev_kl)
+    epochss.append(epochs)
+    label.append(curr_str)
+
+cmap = get_cmap(len(label))
+
+plot_graph('KL',epochss,kl,label,cmap)
+plot_graph('JS',epochss,js,label,cmap)
+plot_graph('Total Variation Distance',epochss,tot_var,label,cmap)
+plot_graph('Reverse KL',epochss,rev_kl,label,cmap)
+
 
