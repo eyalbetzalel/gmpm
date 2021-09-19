@@ -86,7 +86,11 @@ def add_element(dict, key, value):
         dict[key] = []
     dict[key].append(value)
 
-def kld(p, q):
+
+p = []  # p is likelihood of ImageGPT
+q = []  # q is likelihood of PixelSnail
+
+def kld(p, q, revFlag):
 
     # Original Calculation : (1.0 / len(p)) * sum((np.log(p[i] / q[i]) for i in range(len(p)))
 
@@ -96,7 +100,13 @@ def kld(p, q):
 
     p_np = np.asarray(p)
     q_np = np.asarray(q)
-    log_vec = (1.0 / (len(p) - 1)) * np.log(p_np / q_np)
+    if revFlag:
+        # Since we sample from p and want to estimate the reverse KL over q , we need to multiply by factor due to
+        # importance sampling.
+        log_vec = (1.0 / (len(p) - 1)) * np.log(q_np / p_np) * (q_np/p_np)
+    else:
+        log_vec = (1.0 / (len(p) - 1)) * np.log(p_np / q_np)
+
     xi = [0] * len(p)
 
     for i in range(len(p)):
@@ -166,7 +176,8 @@ def jsd(p, q):
 
     p_np = np.asarray(p)
     q_np = np.asarray(q)
-    log_vec = (1.0 / (len(p) - 1)) * 0.5 * ((1 + q_np/p_np) * np.log(2/((p_np / q_np) + 1)) + np.log(p_np / q_np))
+    m_np = 0.5 * (p_np + q_np)
+    log_vec = (1.0 / (len(p) - 1)) * 0.5 * (np.log(p_np / m_np) + np.log(q_np / m_np) * (q_np/p_np))
     xi = [0] * len(p)
 
     for i in range(len(p)):
@@ -209,6 +220,21 @@ def otd(p, q):
 
     return mu, var
 
+# def chi2(p,q):
+#     # TODO
+#     # Estimate is 1/m \sum_i dQn(zi) / dP(zi) - 1 with zi ~ Qn.
+#     mu = 0
+#     var = 0
+#     return mu, var
+#
+# def hsq(p,q):
+#     # TODO
+#     # Estimate is 2 - 2 / m \sum_i exp(0.5 log (dP(zi) / dQn(zi))), zi ~ Qn.
+#     mu = 0
+#     var = 0
+#     return mu, var
+
+
 nll2prob = lambda a: np.exp(-1 * a)/1024
 
 def plot_graph(title,epochs, metrics, labels,colors):
@@ -229,7 +255,7 @@ def plot_graph(title,epochs, metrics, labels,colors):
         plt.errorbar(epochs_vec, mu, yerr=var, c=colors(2*i), label=labels[i], marker='o')
 
         rows = [epochs_vec, mu, var]
-        np.savetxt(labels[i] + "_" + mode + ".csv",
+        np.savetxt(title + "_" + labels[i] + "_" + mode + ".csv",
                    rows,
                    delimiter=", ",
                    fmt='% s')
@@ -321,8 +347,10 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
 
             # Calc f - divergence  :
 
-            p = []
-            q = []
+            # samples took from ImageGPT and the likelihood estmation is preform from imageGPT and PixelSnail :
+
+            p = [] # p is likelihood of ImageGPT
+            q = [] # q is likelihood of PixelSnail
 
             print(" == Calculating f div ==")
 
@@ -334,9 +362,9 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
 
 
             # ot_d_res = otd(p, q)
-            kld_mu, kld_var = kld(p, q)
-            rev_kld_mu, rev_kld_var = kld(q, p)
-            tvd_mu, tvd_var= tvd(p, q)
+            kld_mu, kld_var = kld(p, q, False)
+            rev_kld_mu, rev_kld_var = kld(p, q, True)
+            tvd_mu, tvd_var = tvd(p, q)
             jsd_mu, jsd_var = jsd(p, q)
             curr_run_str = filestr[:-2]
 
