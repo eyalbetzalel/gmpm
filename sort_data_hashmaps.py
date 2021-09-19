@@ -86,7 +86,6 @@ def add_element(dict, key, value):
         dict[key] = []
     dict[key].append(value)
 
-
 p = []  # p is likelihood of ImageGPT
 q = []  # q is likelihood of PixelSnail
 
@@ -142,32 +141,6 @@ def tvd(p, q):
 
     return mu, var
 
-# def jsd(p, q):
-#
-#     # Jensen-Shannon Divergence Calculation :
-#     # Original Calculation (1) : m = [0.5 * (p[i] + q[i]) for i in range(len(p))]
-#     # Original Calculation (2) : return 0.5 * kld(p, m) + 0.5 * kld(q, m)
-#
-#     p_np = np.asarray(p)
-#     q_np = np.asarray(q)
-#     m_np = 0.5 * (p_np + q_np)
-#
-#     xi = [0] * len(p)
-#
-#     for i in range(len(p)):
-#
-#         curr_p = np.delete(p_np, i)
-#         curr_q = np.delete(q_np,i)
-#         curr_m = np.delete(m_np,i)
-#         xi[i] = 0.5 * kld(curr_p, curr_m)[0] + 0.5 * kld(curr_q, curr_m)[0]
-#
-#     # Step 2 - Calculate Mean and VAR :
-#
-#     mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
-#     sigma = ((len(p) - 1) / len(p)) * sum(((xi[i] - mu) ** 2) for i in range(len(p)))
-#
-#     return mu, sigma
-
 def jsd(p, q):
 
     # Jensen-Shannon Divergence Calculation :
@@ -220,19 +193,43 @@ def otd(p, q):
 
     return mu, var
 
-# def chi2(p,q):
-#     # TODO
-#     # Estimate is 1/m \sum_i dQn(zi) / dP(zi) - 1 with zi ~ Qn.
-#     mu = 0
-#     var = 0
-#     return mu, var
-#
-# def hsq(p,q):
-#     # TODO
-#     # Estimate is 2 - 2 / m \sum_i exp(0.5 log (dP(zi) / dQn(zi))), zi ~ Qn.
-#     mu = 0
-#     var = 0
-#     return mu, var
+def chi2(p,q):
+    # chi square divergence
+    # Estimate is 1/m \sum_i dQn(zi) / dP(zi) - 1 with zi ~ Qn.
+    # squared Hellinger distance
+    # Estimate is 2 - 2 / m \sum_i exp(0.5 log (dP(zi) / dQn(zi))), zi ~ Qn.
+    p_np = np.asarray(p)
+    q_np = np.asarray(q)
+    log_vec = (1.0 / (len(p) - 1)) * ((p_np / q_np)-1)
+    xi = [0] * len(p)
+
+    for i in range(len(p)):
+        xi[i] = np.sum(np.delete(log_vec, i))
+
+    # Step 2 - Calculate Mean and VAR :
+
+    mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
+    var = ((len(p) - 1) / len(p)) * sum(((xi[i] - mu) ** 2) for i in range(len(p)))
+
+    return mu, var
+
+def hsq(p,q):
+    # squared Hellinger distance
+    # Estimate is 2 - 2 / m \sum_i exp(0.5 log (dP(zi) / dQn(zi))), zi ~ Qn.
+    p_np = np.asarray(p)
+    q_np = np.asarray(q)
+    log_vec = 2 * (1 - (1.0 / (len(p) - 1)) * np.exp(0.5 * np.log(q_np / p_np)))
+    xi = [0] * len(p)
+
+    for i in range(len(p)):
+        xi[i] = np.sum(np.delete(log_vec, i))
+
+    # Step 2 - Calculate Mean and VAR :
+
+    mu = (1.0 / len(p)) * sum((xi[i]) for i in range(len(p)))
+    var = ((len(p) - 1) / len(p)) * sum(((xi[i] - mu) ** 2) for i in range(len(p)))
+
+    return mu, var
 
 
 nll2prob = lambda a: np.exp(-1 * a)/1024
@@ -281,6 +278,8 @@ kl = []
 js = []
 tot_var = []
 rev_kl = []
+chi = []
+hs = []
 label = []
 epochss = []
 
@@ -294,6 +293,8 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
     curr_var_dist = []
     curr_rev_kl = []
     curr_ot_d = []
+    curr_chi = []
+    curr_hs = []
     epochs = []
 
 
@@ -366,12 +367,16 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
             rev_kld_mu, rev_kld_var = kld(p, q, True)
             tvd_mu, tvd_var = tvd(p, q)
             jsd_mu, jsd_var = jsd(p, q)
+            chi_mu, chi_var = chi2(p, q)
+            hs_mu, hs_var = hsq(p, q)
             curr_run_str = filestr[:-2]
 
             kld_res = (kld_mu, kld_var)
             jsd_res = (jsd_mu, jsd_var)
             tvd_res = (tvd_mu, tvd_var)
             rev_kld_res = (rev_kld_mu, rev_kld_var)
+            chi_res = (chi_mu, chi_var)
+            hs_res = (hs_mu, hs_var)
 
             # Saving results to text file :
 
@@ -392,6 +397,9 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
             curr_js.append(jsd_res)
             curr_var_dist.append(tvd_res)
             curr_rev_kl.append(rev_kld_res)
+            curr_chi.append(chi_res)
+            curr_hs.append(hs_res)
+
             epoch = int(filestr.split("_")[-3])
             epochs.append(epoch)
 
@@ -399,14 +407,18 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
     js.append(curr_js)
     tot_var.append(curr_var_dist)
     rev_kl.append(curr_rev_kl)
+    chi.append(curr_chi)
+    hs.append(curr_hs)
     epochss.append(epochs)
     label.append(curr_str)
 
-cmap = get_cmap(len(label))
+cmap = plt.cm.get_cmap('hsv', 10)
 
 plot_graph('KL',epochss,kl,label,cmap)
 plot_graph('JS',epochss,js,label,cmap)
 plot_graph('Total Variation Distance',epochss,tot_var,label,cmap)
 plot_graph('Reverse KL',epochss,rev_kl,label,cmap)
+plot_graph('Chi2',epochss,chi,label,cmap)
+plot_graph('HS',epochss,hs,label,cmap)
 
 
