@@ -102,7 +102,8 @@ def kld(p, q, revFlag):
     if revFlag:
         # Since we sample from p and want to estimate the reverse KL over q , we need to multiply by factor due to
         # importance sampling.
-        log_vec = (1.0 / (len(p) - 1)) * np.log(q_np / p_np) * (q_np/p_np)
+        log_vec = (1.0 / (len(p) - 1)) * (q_np/p_np)
+        # log_vec = (1.0 / (len(p) - 1)) * np.log(q_np / p_np) * (q_np / p_np)
     else:
         log_vec = (1.0 / (len(p) - 1)) * np.log(p_np / q_np)
 
@@ -232,7 +233,7 @@ def hsq(p,q):
     return mu, var
 
 
-nll2prob = lambda a: np.exp(-1 * a)/1024
+nll2prob = lambda a: np.exp(-1 * a)
 
 def plot_graph(title,epochs, metrics, labels,colors):
 
@@ -251,11 +252,11 @@ def plot_graph(title,epochs, metrics, labels,colors):
         var = [x[1] for x in metrics_vec]
         plt.errorbar(epochs_vec, mu, yerr=var, c=colors(2*i), label=labels[i], marker='o')
 
-        rows = [epochs_vec, mu, var]
-        np.savetxt(title + "_" + labels[i] + "_" + mode + ".csv",
-                   rows,
-                   delimiter=", ",
-                   fmt='% s')
+        # rows = [epochs_vec, mu, var]
+        # np.savetxt(title + "_" + labels[i] + "_" + mode + ".csv",
+        #            rows,
+        #            delimiter=", ",
+        #            fmt='% s')
 
     plt.title(title + " Score - " + mode + " Set")
     plt.legend()
@@ -299,6 +300,8 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
 
 
     for filestr in files:
+        if filestr != 'ep_0_ch_128_psb_8_resb_4_atval_64_attk_8_epoch_0_test_eval.p':
+            continue
         if filestr.endswith("_" + mode + "_eval.p"):
 
             #train_eval
@@ -363,20 +366,20 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
 
 
             # ot_d_res = otd(p, q)
-            kld_mu, kld_var = kld(p, q, False)
+            # kld_mu, kld_var = kld(p, q, False)
             rev_kld_mu, rev_kld_var = kld(p, q, True)
-            tvd_mu, tvd_var = tvd(p, q)
-            jsd_mu, jsd_var = jsd(p, q)
-            chi_mu, chi_var = chi2(p, q)
-            hs_mu, hs_var = hsq(p, q)
+            # tvd_mu, tvd_var = tvd(p, q)
+            # jsd_mu, jsd_var = jsd(p, q)
+            # chi_mu, chi_var = chi2(p, q)
+            # hs_mu, hs_var = hsq(p, q)
             curr_run_str = filestr[:-2]
 
-            kld_res = (kld_mu, kld_var)
-            jsd_res = (jsd_mu, jsd_var)
-            tvd_res = (tvd_mu, tvd_var)
+            # kld_res = (kld_mu, kld_var)
+            # jsd_res = (jsd_mu, jsd_var)
+            # tvd_res = (tvd_mu, tvd_var)
             rev_kld_res = (rev_kld_mu, rev_kld_var)
-            chi_res = (chi_mu, chi_var)
-            hs_res = (hs_mu, hs_var)
+            # chi_res = (chi_mu, chi_var)
+            # hs_res = (hs_mu, hs_var)
 
             # Saving results to text file :
 
@@ -393,32 +396,32 @@ for root, dirs, files in os.walk(args.pixelsnail_res):
             # file.write('%r\n%r\n%r\n%r\n%r\n' % (curr_run_str, kl_d_str, rev_kl_d_str, tot_var_dist_str, jsd_str))
             # file.close()
 
-            curr_kl.append(kld_res)
-            curr_js.append(jsd_res)
-            curr_var_dist.append(tvd_res)
+            # curr_kl.append(kld_res)
+            # curr_js.append(jsd_res)
+            # curr_var_dist.append(tvd_res)
             curr_rev_kl.append(rev_kld_res)
-            curr_chi.append(chi_res)
-            curr_hs.append(hs_res)
+            # curr_chi.append(chi_res)
+            # curr_hs.append(hs_res)
 
             epoch = int(filestr.split("_")[-3])
             epochs.append(epoch)
 
-    kl.append(curr_kl)
-    js.append(curr_js)
-    tot_var.append(curr_var_dist)
+    # kl.append(curr_kl)
+    # js.append(curr_js)
+    # tot_var.append(curr_var_dist)
     rev_kl.append(curr_rev_kl)
-    chi.append(curr_chi)
-    hs.append(curr_hs)
+    # chi.append(curr_chi)
+    # hs.append(curr_hs)
     epochss.append(epochs)
     label.append(curr_str)
 
 cmap = plt.cm.get_cmap('hsv', 10)
 
-plot_graph('KL',epochss,kl,label,cmap)
-plot_graph('JS',epochss,js,label,cmap)
-plot_graph('Total Variation Distance',epochss,tot_var,label,cmap)
-plot_graph('Reverse KL',epochss,rev_kl,label,cmap)
-plot_graph('Chi2',epochss,chi,label,cmap)
-plot_graph('HS',epochss,hs,label,cmap)
+# plot_graph('KL',epochss,kl,label,cmap)
+# plot_graph('JS',epochss,js,label,cmap)
+# plot_graph('Total Variation Distance',epochss,tot_var,label,cmap)
+plot_graph('Bias Estimation',epochss,rev_kl,label,cmap)
+# plot_graph('Chi2',epochss,chi,label,cmap)
+# plot_graph('HS',epochss,hs,label,cmap)
 
 
